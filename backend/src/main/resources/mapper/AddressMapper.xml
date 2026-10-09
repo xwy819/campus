@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.mapper.AddressMapper">
+
+    <select id="findByUserId" resultType="com.campus.entity.Address">
+        SELECT * FROM address WHERE user_id = #{userId} ORDER BY is_default DESC, create_time DESC
+    </select>
+
+    <select id="findById" resultType="com.campus.entity.Address">
+        SELECT * FROM address WHERE id = #{id}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO address (user_id, label, building, dorm, is_default)
+        VALUES (#{userId}, #{label}, #{building}, #{dorm},
+        <choose>
+            <when test="isDefault != null">#{isDefault}</when>
+            <otherwise>0</otherwise>
+        </choose>)
+    </insert>
+
+    <update id="update">
+        UPDATE address
+        <set>
+            <if test="label != null">label = #{label},</if>
+            <if test="building != null">building = #{building},</if>
+            <if test="dorm != null">dorm = #{dorm},</if>
+            <if test="isDefault != null">is_default = #{isDefault},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM address WHERE id = #{id}
+    </delete>
+
+    <update id="clearDefault">
+        UPDATE address SET is_default = 0 WHERE user_id = #{userId}
+    </update>
+
+    <update id="setDefault">
+        UPDATE address SET is_default = 1 WHERE id = #{id}
+    </update>
+</mapper>

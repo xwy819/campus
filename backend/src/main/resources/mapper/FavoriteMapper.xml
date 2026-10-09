@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.mapper.FavoriteMapper">
+
+    <resultMap id="FavoriteResult" type="com.campus.entity.Favorite">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="productId" column="product_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="productTitle" column="product_title"/>
+        <result property="productImageUrl" column="product_image_url"/>
+        <result property="productPrice" column="product_price"/>
+        <result property="productStatus" column="product_status"/>
+        <result property="sellerNickname" column="seller_nickname"/>
+    </resultMap>
+
+    <select id="findByUserAndProduct" resultMap="FavoriteResult">
+        SELECT id, user_id, product_id, create_time
+        FROM favorite
+        WHERE user_id = #{userId} AND product_id = #{productId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO favorite (user_id, product_id) VALUES (#{userId}, #{productId})
+    </insert>
+
+    <delete id="delete">
+        DELETE FROM favorite WHERE user_id = #{userId} AND product_id = #{productId}
+    </delete>
+
+    <select id="findByUserId" resultMap="FavoriteResult">
+        SELECT f.id, f.user_id, f.product_id, f.create_time,
+               p.title AS product_title,
+               p.image_url AS product_image_url,
+               p.price AS product_price,
+               p.status AS product_status,
+               u.nickname AS seller_nickname
+        FROM favorite f
+        LEFT JOIN product p ON f.product_id = p.id
+        LEFT JOIN user u ON p.user_id = u.id
+        WHERE f.user_id = #{userId}
+        ORDER BY f.create_time DESC
+    </select>
+</mapper>

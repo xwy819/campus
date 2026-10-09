@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.mapper.UserMapper">
+
+    <select id="findByPhone" resultType="com.campus.entity.User">
+        SELECT * FROM user WHERE phone = #{phone}
+    </select>
+
+    <select id="findById" resultType="com.campus.entity.User">
+        SELECT * FROM user WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultType="com.campus.entity.User">
+        SELECT * FROM user
+        <where>
+            <if test="role != null">AND role = #{role}</if>
+            <if test="keyword != null and keyword != ''">
+                AND (nickname LIKE CONCAT('%', #{keyword}, '%') OR phone LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY create_time DESC
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user (phone, password, nickname, avatar, role, status)
+        VALUES (#{phone}, #{password}, #{nickname}, #{avatar},
+        <choose>
+            <when test="role != null">#{role}</when>
+            <otherwise>0</otherwise>
+        </choose>,
+        <choose>
+            <when test="status != null">#{status}</when>
+            <otherwise>1</otherwise>
+        </choose>)
+    </insert>
+
+    <update id="update">
+        UPDATE user
+        <set>
+            <if test="nickname != null and nickname != ''">nickname = #{nickname},</if>
+            <if test="avatar != null">avatar = #{avatar},</if>
+            <if test="bio != null">bio = #{bio},</if>
+            <if test="gender != null">gender = #{gender},</if>
+            <if test="birthday != null">birthday = #{birthday},</if>
+            <if test="hobbies != null">hobbies = #{hobbies},</if>
+            <if test="role != null">role = #{role},</if>
+            <if test="status != null">status = #{status},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updatePassword">
+        UPDATE user SET password = #{password} WHERE id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE user SET status = #{status} WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM user WHERE id = #{id}
+    </delete>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM user
+    </select>
+</mapper>

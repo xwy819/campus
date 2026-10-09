@@ -1,0 +1,309 @@
+====================================================
+校园市集 - 服务器部署文档
+====================================================
+
+一、环境要求
+----------------------------------------------------
+组件            版本要求        说明
+JDK             1.8 (Java 8)    pom.xml 指定 java.version=1.8，不可用 JDK 17+
+Maven           3.6+            用于打包后端 jar
+MySQL           5.7+ 或 8.0     字符集 utf8mb4，排序规则 utf8mb4_general_ci
+Nginx           任意稳定版       托管前端静态资源 + 反向代理 API
+Node.js         16+             仅打包用，服务器上不需要常驻
+
+
+二、端口规划
+----------------------------------------------------
+服务              端口      备注
+Spring Boot 后端   8080     server.port=8080，context-path=/api
+前台（用户端）      80       Nginx 托管 frontend/dist
+后台（管理端）      80       同一 Nginx，不同路径或子域名
+MySQL             3306     默认
+
+
+三、目录规划（服务器）
+----------------------------------------------------
+/opt/campusmarket/
+├── app.jar                  # 后端 jar 包
+├── application-prod.yml     # 生产环境配置（覆盖数据库密码等）
+├── logs/
+│   └── app.log              # 运行日志
+├── frontend/                # 前台 dist 产物
+├── admin/                   # 后台 dist 产物
+└── db/                      # SQL 初始化脚本
+    ├── init.sql
+    └── insert_test_products.sql
+
+
+四、数据库初始化
+----------------------------------------------------
+数据库名：campus_market
+字符集：utf8mb4
+
+执行命令：
+mysql -u root -p < /opt/campusmarket/db/init.sql
+mysql -u root -p campus_market < /opt/campusmarket/db/insert_test_products.sql
+
+说明：init.sql 会自动创建数据库和全部表结构，insert_test_products.sql 是测试数据（可选）。
+
+
+五、后端打包与部署
+----------------------------------------------------
+1. 本地打包
+   cd backend
+   mvn clean package -DskipTests
+   产物：target/campusmarket-backend-0.0.1-SNAPSHOT.jar
+
+2. 上传到服务器
+   scp target/campusmarket-backend-0.0.1-SNAPSHOT.jar user@server:/opt/campusmarket/app.jar
+
+3. 在服务器上创建生产配置文件 application-prod.yml
+   路径：/opt/campusmarket/application-prod.yml
+   内容：
+
+   server:
+     port: 8080
+     servlet:
+       context-path: /api
+
+   spring:
+     datasource:
+       url: jdbc:mysql://localhost:3306/campus_market?characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+       username: your_db_user          # 改成生产数据库账号
+       password: your_db_password       # 改成生产数据库密码
+
+   mybatis:
+     mapper-locations: classpath:mapper/*.xml
+     type-aliases-package: com.campus.entity
+     configuration:
+       map-underscore-to-camel-case: true
+       # 生产环境关闭 SQL 日志，注释掉下面这行
+       # log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+4. 启动后端
+   nohup java -jar /opt/campusmarket/app.jar \
+     --spring.profiles.active=prod \
+     --spring.config.additional-location=/opt/campusmarket/application-prod.yml \
+     > /opt/campusmarket/logs/app.log 2>&1 &
+
+5. 验证后端
+   curl http://localhost:8080/api/product/page
+   返回 JSON 数据即正常
+
+
+六、前端打包与部署
+----------------------------------------------------
+1. 本地打包前台
+   cd frontend
+   npm install --registry=https://registry.npmmirror.com
+   npx vite build
+   产物：frontend/dist/
+
+2. 本地打包后台
+   cd admin
+   npm install --registry=https://registry.npmmirror.com
+   npx vite build
+   产物：admin/dist/
+
+3. 上传到服务器
+   scp -r frontend/dist/* user@server:/opt/campusmarket/frontend/
+   scp -r admin/dist/* user@server:/opt/campusmarket/admin/
+
+
+七、Nginx 配置
+----------------------------------------------------
+配置文件路径：/etc/nginx/conf.d/campusmarket.conf
+
+方案 A：子域名区分（推荐）
+
+  # 前台用户端
+  server {
+      listen 80;
+      server_name your-domain.com;
+
+      root /opt/campusmarket/frontend;
+      index index.html;
+
+      location / {
+          try_files $uri $uri/ /index.html;
+      }
+
+      location /api/ {
+          proxy_pass http://127.0.0.1:8080/api/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+      }
+  }
+
+  # 后台管理端
+  server {
+      listen 80;
+      server_name admin.your-domain.com;
+
+      root /opt/campusmarket/admin;
+      index index.html;
+
+      location / {
+          try_files $uri $uri/ /index.html;
+      }
+
+      location /api/ {
+          proxy_pass http://127.0.0.1:8080/api/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+      }
+  }
+
+方案 B：单域名路径区分（只有一个域名时用）
+
+  server {
+      listen 80;
+      server_name your-domain.com;
+
+      # 前台
+      location / {
+          root /opt/campusmarket/frontend;
+          index index.html;
+          try_files $uri $uri/ /index.html;
+      }
+
+      # 后台
+      location /admin/ {
+          alias /opt/campusmarket/admin/;
+          try_files $uri $uri/ /admin/index.html;
+      }
+
+      # API 反向代理
+      location /api/ {
+          proxy_pass http://127.0.0.1:8080/api/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+      }
+  }
+
+启动 Nginx：
+  nginx -t
+  systemctl start nginx
+  systemctl enable nginx
+
+
+八、部署架构总览
+----------------------------------------------------
+用户浏览器
+    |
+    v
++--------------------- Nginx :80 ---------------------+
+| your-domain.com  ->  /opt/campusmarket/frontend/   |
+| admin.domain.com ->  /opt/campusmarket/admin/      |
+| /api/*           ->  proxy_pass 127.0.0.1:8080/api/ |
++----------------------------------------------------+
+    |
+    v
++----------------- Spring Boot :8080 ----------------+
+| campusmarket-backend.jar                            |
+| --spring.profiles.active=prod                       |
+| CORS: 已配置全放通                                    |
+| 拦截器: 登录/注册/商品列表/公告等白名单放行              |
++----------------------------------------------------+
+    |
+    v
++----------------- MySQL :3306 ----------------------+
+| database: campus_market (utf8mb4)                  |
+| tables: admin, user, product, order, category,     |
+|         message, notice, favorite, address, ...    |
++----------------------------------------------------+
+
+
+九、注意事项
+----------------------------------------------------
+1. JDK 版本：必须 1.8，不要装 JDK 17+，项目代码按 Java 8 兼容编写。
+2. 数据库密码：生产环境务必修改，不要用开发环境的默认密码。
+3. SQL 日志：生产环境注释掉 log-impl，避免控制台刷大量 SQL。
+4. CORS 跨域：后端 WebConfig.java 已配 allowedOriginPatterns("*")，
+   Nginx 同域代理后不会触发跨域问题。
+5. 文件上传：项目当前无文件上传接口，头像和商品图片存的是 URL 字符串。
+   如后续需加图片上传功能，需额外配置静态资源映射目录。
+6. 防火墙：只对外开放 80 端口（Nginx），8080 和 3306 不对外暴露。
+7. 进程守护：建议用 systemd 或 supervisor 管理 Java 进程，
+   避免进程异常退出后无人拉起。
+8. 拦截器白名单（无需登录即可访问的接口）：
+   - POST /api/auth/login/admin
+   - POST /api/auth/login/user
+   - POST /api/user/register
+   - GET  /api/user/checkPhone
+   - GET  /api/product/page
+   - GET  /api/product/detail
+   - GET  /api/product/similar
+   - GET  /api/category/list
+   - GET  /api/notice/page
+   - GET  /api/notice/latest
+   - GET  /api/notice/detail
+
+
+十、快速部署命令汇总
+----------------------------------------------------
+# === 服务器侧安装环境 ===
+# CentOS/RHEL:
+yum install -y java-1.8.0-openjdk java-1.8.0-openjdk-devel mysql-server nginx
+
+# Ubuntu/Debian:
+apt install -y openjdk-8-jdk mysql-server nginx
+
+# === 初始化数据库 ===
+mysql -u root -p < /opt/campusmarket/db/init.sql
+mysql -u root -p campus_market < /opt/campusmarket/db/insert_test_products.sql
+
+# === 启动后端 ===
+nohup java -jar /opt/campusmarket/app.jar \
+  --spring.profiles.active=prod \
+  --spring.config.additional-location=/opt/campusmarket/application-prod.yml \
+  > /opt/campusmarket/logs/app.log 2>&1 &
+
+# === 启动 Nginx ===
+nginx -t && systemctl start nginx && systemctl enable nginx
+
+# === 验证 ===
+curl http://localhost:8080/api/product/page    # 后端接口
+curl http://localhost/                          # 前台页面
+curl http://localhost/admin/                    # 后台页面（方案B）
+
+
+十一、systemd 服务配置（可选，推荐）
+----------------------------------------------------
+创建文件：/etc/systemd/system/campusmarket.service
+
+[Unit]
+Description=Campus Market Backend
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/campusmarket
+ExecStart=/usr/bin/java -jar /opt/campusmarket/app.jar --spring.profiles.active=prod --spring.config.additional-location=/opt/campusmarket/application-prod.yml
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/opt/campusmarket/logs/app.log
+StandardError=append:/opt/campusmarket/logs/app.log
+
+[Install]
+WantedBy=multi-user.target
+
+操作命令：
+  systemctl daemon-reload
+  systemctl start campusmarket
+  systemctl enable campusmarket
+  systemctl status campusmarket     # 查看状态
+  systemctl restart campusmarket   # 重启后端
+  journalctl -u campusmarket -f    # 实时查看日志
+
+
+====================================================
+文档结束
+====================================================

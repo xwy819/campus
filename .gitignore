@@ -1,0 +1,31 @@
+# 依赖
+node_modules/
+frontend/node_modules/
+admin/node_modules/
+
+# 构建产物
+frontend/dist/
+admin/dist/
+docs/
+
+# 后端
+backend/target/
+*.class
+*.jar
+backend/.runtime_cp.txt
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+
+# 环境/密钥
+.env
+*.key

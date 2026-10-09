@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.mapper.ProductMapper">
+
+    <resultMap id="ProductResult" type="com.campus.entity.Product">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="categoryId" column="category_id"/>
+        <result property="title" column="title"/>
+        <result property="description" column="description"/>
+        <result property="price" column="price"/>
+        <result property="conditionLevel" column="condition_level"/>
+        <result property="imageUrl" column="image_url"/>
+        <result property="imagesJson" column="images_json"/>
+        <result property="status" column="status"/>
+        <result property="viewCount" column="view_count"/>
+        <result property="deliveryType" column="delivery_type"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="categoryName" column="category_name"/>
+        <result property="sellerNickname" column="seller_nickname"/>
+        <result property="sellerPhone" column="seller_phone"/>
+        <result property="sellerAvatar" column="seller_avatar"/>
+    </resultMap>
+
+    <select id="findPage" resultMap="ProductResult">
+        SELECT p.*, c.name AS category_name, u.nickname AS seller_nickname, u.phone AS seller_phone, u.avatar AS seller_avatar
+        FROM product p
+        LEFT JOIN category c ON p.category_id = c.id
+        LEFT JOIN user u ON p.user_id = u.id
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND p.title LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="categoryId != null">
+                AND p.category_id = #{categoryId}
+            </if>
+            <if test="minPrice != null">
+                AND p.price &gt;= #{minPrice}
+            </if>
+            <if test="maxPrice != null">
+                AND p.price &lt;= #{maxPrice}
+            </if>
+            <if test="conditionLevel != null">
+                AND p.condition_level = #{conditionLevel}
+            </if>
+            <if test="status != null">
+                AND p.status = #{status}
+            </if>
+        </where>
+        ORDER BY p.create_time DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM product p
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND p.title LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="categoryId != null">
+                AND p.category_id = #{categoryId}
+            </if>
+            <if test="minPrice != null">
+                AND p.price &gt;= #{minPrice}
+            </if>
+            <if test="maxPrice != null">
+                AND p.price &lt;= #{maxPrice}
+            </if>
+            <if test="conditionLevel != null">
+                AND p.condition_level = #{conditionLevel}
+            </if>
+            <if test="status != null">
+                AND p.status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <select id="findById" resultMap="ProductResult">
+        SELECT p.*, c.name AS category_name, u.nickname AS seller_nickname, u.phone AS seller_phone, u.avatar AS seller_avatar
+        FROM product p
+        LEFT JOIN category c ON p.category_id = c.id
+        LEFT JOIN user u ON p.user_id = u.id
+        WHERE p.id = #{id}
+    </select>
+
+    <select id="findByUserId" resultMap="ProductResult">
+        SELECT p.*, c.name AS category_name
+        FROM product p
+        LEFT JOIN category c ON p.category_id = c.id
+        WHERE p.user_id = #{userId}
+        ORDER BY p.create_time DESC
+    </select>
+
+    <select id="findByTitleAndUserId" resultMap="ProductResult">
+        SELECT * FROM product WHERE title = #{title} AND user_id = #{userId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product (user_id, category_id, title, description, price, condition_level, image_url, status, delivery_type)
+        VALUES (#{userId}, #{categoryId}, #{title}, #{description}, #{price}, #{conditionLevel}, #{imageUrl},
+        <choose>
+            <when test="status != null">#{status}</when>
+            <otherwise>0</otherwise>
+        </choose>,
+        <choose>
+            <when test="deliveryType != null">#{deliveryType}</when>
+            <otherwise>1</otherwise>
+        </choose>)
+    </insert>
+
+    <update id="update">
+        UPDATE product
+        <set>
+            <if test="categoryId != null">category_id = #{categoryId},</if>
+            <if test="title != null and title != ''">title = #{title},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="price != null">price = #{price},</if>
+            <if test="conditionLevel != null">condition_level = #{conditionLevel},</if>
+            <if test="imageUrl != null">image_url = #{imageUrl},</if>
+              <if test="imagesJson != null">images_json = #{imagesJson},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="deliveryType != null">delivery_type = #{deliveryType},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE product SET status = #{status} WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM product WHERE id = #{id}
+    </delete>
+
+    <select id="countByStatus" resultType="long">
+        SELECT COUNT(*) FROM product WHERE status = #{status}
+    </select>
+
+    <update id="incrementViewCount">
+        UPDATE product SET view_count = COALESCE(view_count, 0) + 1 WHERE id = #{id}
+    </update>
+
+    <select id="findSimilar" resultMap="ProductResult">
+        SELECT p.*, c.name AS category_name, u.nickname AS seller_nickname, u.phone AS seller_phone, u.avatar AS seller_avatar
+        FROM product p
+        LEFT JOIN category c ON p.category_id = c.id
+        LEFT JOIN user u ON p.user_id = u.id
+        WHERE p.status = 1
+        <if test="categoryId != null">
+            AND p.category_id = #{categoryId}
+        </if>
+        <if test="excludeId != null">
+            AND p.id != #{excludeId}
+        </if>
+        ORDER BY p.create_time DESC
+        LIMIT #{limit}
+    </select>
+</mapper>

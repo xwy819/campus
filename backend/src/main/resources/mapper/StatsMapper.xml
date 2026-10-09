@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.mapper.StatsMapper">
+
+    <select id="categoryStats" resultType="java.util.Map">
+        SELECT c.name AS category_name,
+               COUNT(p.id) AS product_cnt,
+               ROUND(COALESCE(AVG(p.price), 0), 2) AS avg_price,
+               COALESCE(MAX(p.price), 0) AS max_price,
+               COALESCE(MIN(p.price), 0) AS min_price
+        FROM category c
+        LEFT JOIN product p ON c.id = p.category_id AND p.status = 1
+        GROUP BY c.id, c.name
+        ORDER BY product_cnt DESC
+    </select>
+
+    <select id="priceLevel" resultType="java.util.Map">
+        SELECT
+          SUM(CASE WHEN price &lt; 20 THEN 1 ELSE 0 END) AS low_cnt,
+          SUM(CASE WHEN price &gt;= 20 AND price &lt; 100 THEN 1 ELSE 0 END) AS mid_cnt,
+          SUM(CASE WHEN price &gt;= 100 THEN 1 ELSE 0 END) AS high_cnt,
+          COUNT(*) AS total
+        FROM product
+        WHERE status = 1
+    </select>
+</mapper>

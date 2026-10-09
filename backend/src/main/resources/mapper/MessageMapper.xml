@@ -1,0 +1,88 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.mapper.MessageMapper">
+
+    <select id="findPage" resultType="com.campus.entity.Message">
+        SELECT * FROM message
+        WHERE (sender_id = #{userId} OR receiver_id = #{userId}) AND sender_id != receiver_id
+        ORDER BY create_time DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM message
+        WHERE (sender_id = #{userId} OR receiver_id = #{userId}) AND sender_id != receiver_id
+    </select>
+
+    <select id="countUnread" resultType="long">
+        SELECT COUNT(*) FROM message
+        WHERE receiver_id = #{userId} AND is_read = 0
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO message (order_id, sender_id, receiver_id, content, is_read)
+        VALUES (<choose><when test="orderId != null">#{orderId}</when><otherwise>NULL</otherwise></choose>,
+                #{senderId}, #{receiverId}, #{content},
+                <choose><when test="isRead != null">#{isRead}</when><otherwise>0</otherwise></choose>)
+    </insert>
+
+    <update id="markRead">
+        UPDATE message SET is_read = 1 WHERE id = #{id}
+    </update>
+
+    <!-- 私聊会话列表：按对方用户分组，取每个会话最新一条消息 + 未读数 -->
+    <select id="findConversations" resultType="com.campus.vo.ConversationVO">
+        SELECT
+            latest.peer_id AS peerId,
+            u.nickname AS peerNickname,
+            u.avatar AS peerAvatar,
+            m.content AS lastContent,
+            m.create_time AS lastTime,
+            COALESCE(uc.unread_count, 0) AS unreadCount
+        FROM (
+            SELECT
+                CASE WHEN sender_id = #{userId} THEN receiver_id ELSE sender_id END AS peer_id,
+                MAX(id) AS max_id
+            FROM message
+            WHERE (sender_id = #{userId} OR receiver_id = #{userId}) AND sender_id != receiver_id
+            GROUP BY peer_id
+        ) latest
+        JOIN message m ON m.id = latest.max_id
+        LEFT JOIN user u ON u.id = latest.peer_id
+        LEFT JOIN (
+            SELECT sender_id AS peer_id, COUNT(*) AS unread_count
+            FROM message
+            WHERE receiver_id = #{userId} AND is_read = 0
+            GROUP BY sender_id
+        ) uc ON uc.peer_id = latest.peer_id
+        ORDER BY m.create_time DESC
+    </select>
+
+    <!-- 当前用户与指定对方之间的全部消息，按时间升序 -->
+    <select id="findConversationMessages" resultType="com.campus.entity.Message">
+        SELECT * FROM message
+        WHERE (sender_id = #{userId} AND receiver_id = #{peerId})
+           OR (sender_id = #{peerId} AND receiver_id = #{userId})
+        ORDER BY create_time ASC
+    </select>
+
+    <!-- 标记与指定对方的会话全部已读 -->
+    <update id="markReadAll">
+        UPDATE message SET is_read = 1
+        WHERE receiver_id = #{userId} AND sender_id = #{peerId} AND is_read = 0
+    </update>
+
+    <!-- 清空与指定对方的全部消息（双向） -->
+    <delete id="clearConversation">
+        DELETE FROM message
+        WHERE (sender_id = #{userId} AND receiver_id = #{peerId})
+           OR (sender_id = #{peerId} AND receiver_id = #{userId})
+    </delete>
+
+    <!-- 删除单条消息（校验当前用户是接收方） -->
+    <delete id="deleteById">
+        DELETE FROM message
+        WHERE id = #{id} AND receiver_id = #{userId}
+    </delete>
+</mapper>

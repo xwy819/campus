@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.mapper.OrderMapper">
+
+    <resultMap id="OrderResult" type="com.campus.entity.Order">
+        <id property="id" column="id"/>
+        <result property="productId" column="product_id"/>
+        <result property="buyerId" column="buyer_id"/>
+        <result property="sellerId" column="seller_id"/>
+        <result property="status" column="status"/>
+        <result property="finalPrice" column="final_price"/>
+        <result property="deliveryType" column="delivery_type"/>
+        <result property="addressId" column="address_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="productTitle" column="product_title"/>
+        <result property="productImageUrl" column="product_image_url"/>
+        <result property="buyerNickname" column="buyer_nickname"/>
+        <result property="sellerNickname" column="seller_nickname"/>
+    </resultMap>
+
+    <select id="findPage" resultMap="OrderResult">
+        SELECT o.*, p.title AS product_title, p.image_url AS product_image_url,
+               b.nickname AS buyer_nickname, s.nickname AS seller_nickname
+        FROM `order` o
+        LEFT JOIN product p ON o.product_id = p.id
+        LEFT JOIN user b ON o.buyer_id = b.id
+        LEFT JOIN user s ON o.seller_id = s.id
+        <where>
+            <if test="userId != null">AND (o.buyer_id = #{userId} OR o.seller_id = #{userId})</if>
+            <if test="buyerId != null">AND o.buyer_id = #{buyerId}</if>
+            <if test="sellerId != null">AND o.seller_id = #{sellerId}</if>
+            <if test="status != null">AND o.status = #{status}</if>
+        </where>
+        ORDER BY o.create_time DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM `order` o
+        <where>
+            <if test="userId != null">AND (o.buyer_id = #{userId} OR o.seller_id = #{userId})</if>
+            <if test="buyerId != null">AND o.buyer_id = #{buyerId}</if>
+            <if test="sellerId != null">AND o.seller_id = #{sellerId}</if>
+            <if test="status != null">AND o.status = #{status}</if>
+        </where>
+    </select>
+
+    <select id="findById" resultMap="OrderResult">
+        SELECT o.*, p.title AS product_title, p.image_url AS product_image_url,
+               b.nickname AS buyer_nickname, s.nickname AS seller_nickname
+        FROM `order` o
+        LEFT JOIN product p ON o.product_id = p.id
+        LEFT JOIN user b ON o.buyer_id = b.id
+        LEFT JOIN user s ON o.seller_id = s.id
+        WHERE o.id = #{id}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO `order` (product_id, buyer_id, seller_id, status, final_price, delivery_type, address_id)
+        VALUES (#{productId}, #{buyerId}, #{sellerId}, #{status}, #{finalPrice},
+        <choose>
+            <when test="deliveryType != null">#{deliveryType}</when>
+            <otherwise>1</otherwise>
+        </choose>, #{addressId})
+    </insert>
+
+    <update id="updateStatus">
+        UPDATE `order` SET status = #{status} WHERE id = #{id}
+    </update>
+
+    <select id="countByStatus" resultType="long">
+        SELECT COUNT(*) FROM `order` WHERE status = #{status}
+    </select>
+
+    <select id="sumAmount" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(final_price), 0) FROM `order` WHERE status = #{status}
+    </select>
+</mapper>
